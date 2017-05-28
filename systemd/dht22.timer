@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer to take regularly take humidity and temperature measurements
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+Unit=dht22.service
+
+[Install]
+WantedBy=timers.target

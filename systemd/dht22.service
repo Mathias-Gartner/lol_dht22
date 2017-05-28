@@ -1,0 +1,10 @@
+[Unit]
+Description=Measure humidity and temperature and write them into a database
+
+[Service]
+Type=oneshot
+User=dht22
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+ExecStart=/opt/loldht
