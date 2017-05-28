@@ -10,8 +10,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include <my_global.h>
+#include <mysql.h>
 
 #include "locking.h"
 
@@ -87,6 +91,79 @@ static int read_dht22_dat()
         t /= 10.0;
         if ((dht22_dat[2] & 0x80) != 0)  t *= -1;
 
+
+    MYSQL *con = mysql_init(NULL);
+    if (con == NULL)
+    {
+      fprintf(stderr, "%s\n", mysql_error(con));
+      exit(EXIT_FAILURE);
+    }
+
+    if (mysql_real_connect(con, "localhost", "dht22", "REPLACE-ME", NULL, 0, NULL, 0) == NULL)
+    {
+      fprintf(stderr, "%s\n", mysql_error(con));
+      mysql_close(con);
+      exit(EXIT_FAILURE);
+    }
+
+    if (mysql_query(con, "USE dht22"))
+    {
+      fprintf(stderr, "%s\n", mysql_error(con));
+      mysql_close(con);
+      exit(EXIT_FAILURE);
+    }
+
+    MYSQL_STMT* insert = mysql_stmt_init(con);
+    if (insert == NULL)
+    {
+      fprintf(stderr, "%s\n", mysql_error(con));
+      mysql_close(con);
+      exit(EXIT_FAILURE);
+    }
+
+    const char* const insertStatement = "INSERT INTO measurements (humidity, temperature) VALUES (?, ?)";
+    if (mysql_stmt_prepare(insert, insertStatement, strlen(insertStatement)))
+    {
+      fprintf(stderr, "%s\n", mysql_error(con));
+      mysql_stmt_close(insert);
+      mysql_close(con);
+      exit(EXIT_FAILURE);
+    }
+
+    MYSQL_BIND params[2];
+    memset(params, 0, sizeof(MYSQL_BIND) * 2);
+    params[0].buffer_type = MYSQL_TYPE_FLOAT;
+    params[0].buffer = &h;
+    params[1].buffer_type = MYSQL_TYPE_FLOAT;
+    params[1].buffer = &t;
+
+    if (mysql_stmt_bind_param(insert, params))
+    {
+      fprintf(stderr, "%s\n", mysql_error(con));
+      mysql_stmt_close(insert);
+      mysql_close(con);
+      exit(EXIT_FAILURE);
+    }
+
+    if (mysql_stmt_execute(insert))
+    {
+      fprintf(stderr, "%s\n", mysql_error(con));
+      mysql_stmt_close(insert);
+      mysql_close(con);
+      exit(EXIT_FAILURE);
+    }
+
+    my_ulonglong rows = mysql_stmt_affected_rows(insert);
+    mysql_stmt_close(insert);
+    mysql_close(con);
+
+    if (rows < 1)
+    {
+      fprintf(stderr, "Insert failed. 0 rows affected.");
+      mysql_stmt_close(insert);
+      mysql_close(con);
+      exit(EXIT_FAILURE);
+    }
 
     printf("Humidity = %.2f %% Temperature = %.2f *C \n", h, t );
     return 1;
